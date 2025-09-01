@@ -78,7 +78,7 @@ as it the job UUID after import will be different than the one on disk.
 
     @PluginProperty(
             title = "Shared Checkout",
-            description = "If true, Import and Export plugins will use the same checkout directory defined by 'Shared Checkout Path' and ignore the 'Base Directory'.",
+            description = "If true, Import and Export plugins will use the same checkout directory defined by 'Shared Checkout Path' relative to 'Base Directory' parent dir.",
             required = false
     )
     @SelectValues(values = ['true','false'])
