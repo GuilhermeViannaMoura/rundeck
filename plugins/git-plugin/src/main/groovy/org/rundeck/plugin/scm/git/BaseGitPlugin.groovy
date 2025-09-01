@@ -67,6 +67,10 @@ import java.util.regex.Pattern
  */
 class BaseGitPlugin {
     public static final String REMOTE_NAME = "origin"
+    /**
+     * Global lock to serialize git operations between Import/Export plugins when sharing checkout.
+     */
+    static final Object GLOBAL_GIT_LOCK = new Object()
     Git git
     Repository repo
     File workingDir
@@ -547,6 +551,7 @@ class BaseGitPlugin {
     }
 
     protected void cloneOrCreate(final ScmOperationContext context, File base, String url, String integration) throws ScmPluginException {
+        // if directory exists but is not a git repo and shared checkout is enabled elsewhere we do not delete it automatically
         if (base.isDirectory() && new File(base, ".git").isDirectory()) {
             def arepo = new FileRepositoryBuilder().setGitDir(new File(base, ".git")).setWorkTree(base).build()
             def agit = new Git(arepo)
@@ -556,7 +561,10 @@ class BaseGitPlugin {
             def found = config.getString("remote", REMOTE_NAME, "url")
             def projectName = config.getString("rundeck", "scm-plugin", "project-name")
             def gitIntegration = config.getString("rundeck", "scm-plugin", "integration")
-            if (projectName && !projectName.equals(context.frameworkProject) || gitIntegration && !gitIntegration.equals(integration)) {
+            boolean shared = commonConfig?.isSharedCheckout()
+            boolean projectMismatch = projectName && !projectName.equals(context.frameworkProject)
+            boolean integrationMismatch = gitIntegration && !gitIntegration.split(',').contains(integration)
+            if (projectMismatch || (integrationMismatch && !shared)) {
                 throw new ScmPluginInvalidInput(
                         "The base directory is already in use by another project: ${projectName} with integration : ${gitIntegration}",
                         Validator.errorReport(
@@ -564,9 +572,18 @@ class BaseGitPlugin {
                                 "The base directory is already in use by another project: ${projectName} with integration : ${gitIntegration}"
                         )
                 )
-            } else if (!projectName) {
+            }
+            // initialize or update metadata
+            if (!projectName) {
                 config.setString("rundeck", "scm-plugin", "project-name", context.frameworkProject)
+            }
+            if (!gitIntegration) {
                 config.setString("rundeck", "scm-plugin", "integration", integration)
+                config.save()
+            } else if (shared && integrationMismatch) {
+                // append new integration marker for shared checkout use-case
+                def newValue = (gitIntegration.split(',') as Set) + integration
+                config.setString("rundeck", "scm-plugin", "integration", newValue.join(','))
                 config.save()
             }
             def needsClone=false;
@@ -599,6 +616,29 @@ class BaseGitPlugin {
         } else {
             performClone(base, url, context, integration)
         }
+    }
+
+    /**
+     * Decide effective working directory based on shared checkout configuration. If shareCheckout=true, returns
+     * the sharedCheckoutPath relative to the supplied project basedir (config.dir may still point elsewhere originally).
+     */
+    protected File resolveWorkingDir(File projectBaseDir){
+        if(commonConfig?.isSharedCheckout()){
+            //If path is absolute, use directly, else relative to project base dir parent.
+            File shared = new File(commonConfig.sharedCheckoutPath)
+            if(!shared.isAbsolute()){
+                // place under original dir's parent to keep location predictable
+                File parent = projectBaseDir?.parentFile ?: projectBaseDir
+                shared = new File(parent, commonConfig.sharedCheckoutPath)
+            }
+            return shared
+        }
+        return projectBaseDir
+    }
+
+    /** Simple validation when shared checkout is used. */
+    protected void validateSharedCheckoutCompatibility(String integration){
+        if(!commonConfig?.isSharedCheckout()) return
     }
 
     private static String collectCauseMessages(Exception e) {

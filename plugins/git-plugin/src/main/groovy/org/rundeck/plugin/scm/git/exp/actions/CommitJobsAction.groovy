@@ -115,9 +115,9 @@ class CommitJobsAction extends BaseAction implements GitExportAction {
             ScmUserInfoMissing.fieldMissing("committerEmail")
         }
 
-        plugin.serializeAll(jobs, plugin.format, plugin.config.exportPreserve, plugin.config.exportOriginal)
-        String commitMessage = input[P_MESSAGE].toString()
-        Status status = plugin.git.status().call()
+    plugin.serializeAll(jobs, plugin.format, plugin.config.exportPreserve, plugin.config.exportOriginal)
+    String commitMessage = input[P_MESSAGE].toString()
+    Status status = plugin.git.status().call()
         int pathcount=0
         //add all changes to index
         if (jobs) {
@@ -144,16 +144,25 @@ class CommitJobsAction extends BaseAction implements GitExportAction {
             result.message = 'No git changes needed'
             return result
         }
-        CommitCommand commit1 = plugin.git.commit().
-                setMessage(commitMessage).
-                setCommitter(commitIdentName, commitIdentEmail)
-        jobs.each {
-            commit1.setOnly(plugin.relativePath(it))
+        def doCommit = {
+            CommitCommand commit1 = plugin.git.commit().
+                    setMessage(commitMessage).
+                    setCommitter(commitIdentName, commitIdentEmail)
+            jobs.each {
+                commit1.setOnly(plugin.relativePath(it))
+            }
+            todelete.each {
+                commit1.setOnly(it)
+            }
+            commit = commit1.call()
         }
-        todelete.each {
-            commit1.setOnly(it)
+        if(plugin.commonConfig.isSharedCheckout()){
+            synchronized (plugin.GLOBAL_GIT_LOCK){
+                doCommit()
+            }
+        }else{
+            doCommit()
         }
-        commit = commit1.call()
         result.success = true
         result.commit=new GitScmCommit(GitUtil.metaForCommit(commit))
         plugin.cleanJobStatusCache(jobs)

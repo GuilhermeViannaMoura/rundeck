@@ -120,15 +120,25 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
         committerName = config.committerName
         committerEmail = config.committerEmail
         File base = new File(config.dir)
-        mapper = new TemplateJobFileMapper(expand(config.pathTemplate, [format: config.format], "config"), base)
-        cloneOrCreate(context, base, config.url, PLUGIN_INTEGRATION)
+        File effective = resolveWorkingDir(base)
+        validateSharedCheckoutCompatibility(PLUGIN_INTEGRATION)
+        mapper = new TemplateJobFileMapper(expand(config.pathTemplate, [format: config.format], "config"), effective)
+        if(config.isSharedCheckout()){
+            synchronized (GLOBAL_GIT_LOCK){
+                cloneOrCreate(context, effective, config.url, PLUGIN_INTEGRATION)
+            }
+        }else{
+            cloneOrCreate(context, effective, config.url, PLUGIN_INTEGRATION)
+        }
         //check clone was ok
         if (git?.repository.getFullBranch() != "refs/heads/$branch") {
             logger.debug("branch differs")
             if(config.createBranch){
                 if(config.baseBranch && existBranch("refs/remotes/${this.REMOTE_NAME}/${config.baseBranch}")){
                     createBranch(context, config.branch, config.baseBranch)
-                    cloneOrCreate(context, base, config.url, PLUGIN_INTEGRATION)
+                    synchronized (GLOBAL_GIT_LOCK){
+                        cloneOrCreate(context, effective, config.url, PLUGIN_INTEGRATION)
+                    }
                 }else{
                     logger.debug("Non existent remote branch: ${config.baseBranch}")
                     throw new ScmPluginException("Non existent remote branch: ${config.baseBranch}")
@@ -138,7 +148,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
                         "because it does not exist. To create it, you need to set the Create Branch option to true.")
             }
         }
-        workingDir = base
+        workingDir = effective
         inited = true
     }
 
@@ -275,26 +285,28 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
 
         boolean fetchError=false
         if (performFetch) {
-            try {
+            def doFetchAndMaybePull = {
                 fetchFromRemote(context)
-            } catch (Exception e) {
-                fetchError=true
-                msgs<<"Fetch from the repository failed: ${e.message}"
-                logger.error("Failed fetch from the repository: ${e.message}")
-                logger.debug("Failed fetch from the repository: ${e.message}", e)
-            }
-            if(config.shouldPullAutomatically()){
-                try{
+                if(config.shouldPullAutomatically()){
                     def pullResult = gitPull(context)
                     if(pullResult.successful){
                         logger.debug(pullResult.mergeResult?.toString())
                     }
-                } catch (Exception e) {
-                    msgs << "Automatic pull from the repository failed: ${e.message}"
-                    logger.error("Failed automatic pull from the repository: ${e.message}")
-                    logger.debug("Failed automatic pull from the repository: ${e.message}", e)
                 }
-
+            }
+            try {
+                if(commonConfig.isSharedCheckout()){
+                    synchronized (GLOBAL_GIT_LOCK){
+                        doFetchAndMaybePull()
+                    }
+                }else{
+                    doFetchAndMaybePull()
+                }
+            } catch (Exception e) {
+                fetchError=true
+                msgs<<"Fetch from the repository failed: ${e.message}"
+                logger.error("Failed fetch/pull from the repository: ${e.message}")
+                logger.debug("Failed fetch/pull from the repository: ${e.message}", e)
             }
         }
 

@@ -38,9 +38,10 @@ import static BuilderUtil.property
 @Plugin(name = GitImportPluginFactory.PROVIDER_NAME, service = ServiceNameConstants.ScmImport)
 @PluginDescription(title = GitImportPluginFactory.TITLE, description = GitImportPluginFactory.DESC)
 class GitImportPluginFactory implements ScmImportPluginFactory, Describable {
-    static final String PROVIDER_NAME = 'git-import'
-    public static final String DESC = "Import Jobs from a Git Repository"
-    public static final String TITLE = "Git Import"
+    // Renamed provider so this build registers as a distinct plugin
+    static final String PROVIDER_NAME = 'git-import-shared'
+    public static final String DESC = "Import Jobs from a Git Repository (Shared Checkout Variant)"
+    public static final String TITLE = "Git Import Shared"
 
 
     @Override

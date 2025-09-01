@@ -38,9 +38,9 @@ import static BuilderUtil.property
 @Plugin(name = GitExportPluginFactory.PROVIDER_NAME, service = ServiceNameConstants.ScmExport)
 @PluginDescription(title = GitExportPluginFactory.TITLE, description = GitExportPluginFactory.DESC)
 class GitExportPluginFactory implements ScmExportPluginFactory, Describable {
-    static final String PROVIDER_NAME = 'git-export'
-    public static final String DESC = "Export Jobs to a Git Repository"
-    public static final String TITLE = "Git Export"
+    static final String PROVIDER_NAME = 'git-export-shared'
+    public static final String DESC = "Export Jobs to a Git Repository (Shared Checkout Variant)"
+    public static final String TITLE = "Git Export Shared"
 
     @Override
     Description getDescription() {

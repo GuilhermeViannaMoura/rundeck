@@ -120,7 +120,14 @@ Pulling from remote branch: `${plugin.branch}`"""
     }
 
     ScmExportResult gitPull(final ScmOperationContext context, final GitImportPlugin plugin) {
-        def pullResult = plugin.gitPull(context)
+        def pullResult
+        if(plugin.commonConfig.isSharedCheckout()){
+            synchronized (plugin.GLOBAL_GIT_LOCK){
+                pullResult = plugin.gitPull(context)
+            }
+        }else{
+            pullResult = plugin.gitPull(context)
+        }
         def result = new ScmExportResultImpl()
         result.success = pullResult.successful
         result.message = "Git Pull "+(result.success?'succeeded':'failed')

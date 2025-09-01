@@ -95,7 +95,14 @@ class TagAction extends BaseAction implements GitExportAction {
         Ref tagref
 
         try {
-            tagref = GitUtil.createTag(plugin.git, input[P_TAG_NAME], input[P_MESSAGE], commit)
+            def create = { GitUtil.createTag(plugin.git, input[P_TAG_NAME], input[P_MESSAGE], commit) }
+            if(plugin.commonConfig.isSharedCheckout()){
+                synchronized (plugin.GLOBAL_GIT_LOCK){
+                    tagref = create()
+                }
+            }else{
+                tagref = create()
+            }
         } catch (Exception e) {
             plugin.logger.debug("Failed create tag: ${e.message}", e)
             throw new ScmPluginException("Failed create tag: ${e.message}", e)

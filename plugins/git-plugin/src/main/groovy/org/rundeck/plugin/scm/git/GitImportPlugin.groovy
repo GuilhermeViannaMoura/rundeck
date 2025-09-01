@@ -160,12 +160,20 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
         }
 
         File base = new File(config.dir)
-        mapper = new TemplateJobFileMapper(expand(config.pathTemplate, [format: config.format], "config"), base)
+        File effective = resolveWorkingDir(base)
+        validateSharedCheckoutCompatibility(PLUGIN_INTEGRATION)
+        mapper = new TemplateJobFileMapper(expand(config.pathTemplate, [format: config.format], "config"), effective)
 
         this.branch = config.branch
-        cloneOrCreate(context, base, config.url, PLUGIN_INTEGRATION)
+        if(config.isSharedCheckout()){
+            synchronized (GLOBAL_GIT_LOCK){
+                cloneOrCreate(context, effective, config.url, PLUGIN_INTEGRATION)
+            }
+        }else{
+            cloneOrCreate(context, effective, config.url, PLUGIN_INTEGRATION)
+        }
 
-        workingDir = base
+        workingDir = effective
 
         SetupTracking.setupWithInput(this, this.trackedItems, config.rawInput)
 
@@ -213,9 +221,18 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
         def msgs = []
         if (performFetch) {
             try {
-                fetchFromRemote(context)
-                if(config.shouldPullAutomatically()){
-                    actions[ACTION_PULL].performAction(context,this,null,null,null)
+                if(commonConfig.isSharedCheckout()){
+                    synchronized (GLOBAL_GIT_LOCK){
+                        fetchFromRemote(context)
+                        if(config.shouldPullAutomatically()){
+                            actions[ACTION_PULL].performAction(context,this,null,null,null)
+                        }
+                    }
+                }else{
+                    fetchFromRemote(context)
+                    if(config.shouldPullAutomatically()){
+                        actions[ACTION_PULL].performAction(context,this,null,null,null)
+                    }
                 }
             } catch (Exception e) {
                 msgs<<"Fetch from the repository failed: ${e.message}"

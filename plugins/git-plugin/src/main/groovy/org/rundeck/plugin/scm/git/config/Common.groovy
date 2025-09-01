@@ -76,6 +76,30 @@ as it the job UUID after import will be different than the one on disk.
     )
     String dir
 
+    @PluginProperty(
+            title = "Shared Checkout",
+            description = "If true, Import and Export plugins will use the same checkout directory defined by 'Shared Checkout Path' and ignore the 'Base Directory'.",
+            required = false
+    )
+    @SelectValues(values = ['true','false'])
+    @RenderingOption(
+            key = StringRenderingConstants.GROUP_NAME,
+            value = "Git Repository"
+    )
+    String shareCheckout
+
+    @PluginProperty(
+            title = "Shared Checkout Path",
+            description = "Path to be used when Shared Checkout is enabled (shareCheckout=true). Both Import and Export plugins will operate on this single working tree.",
+            required = false,
+            defaultValue = "scm/git/shared"
+    )
+    @RenderingOption(
+            key = StringRenderingConstants.GROUP_NAME,
+            value = "Git Repository"
+    )
+    String sharedCheckoutPath
+
     static class PathTemplateValidator implements PropertyValidator {
         @Override
         boolean isValid(final String value) throws ValidationException {
@@ -239,6 +263,10 @@ Path can include variable references
     boolean shouldFetchAutomatically(){
         return fetchAutomatically in [null,'true']
     }
+
+        boolean isSharedCheckout(){
+                return shareCheckout in ['true']
+        }
 
 
     static List<Property> addDirDefaultValue(List<Property> properties, File basedir, String finalDir) {

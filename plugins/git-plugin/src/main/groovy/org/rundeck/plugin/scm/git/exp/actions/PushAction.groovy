@@ -115,9 +115,18 @@ Pushing to remote branch: `${plugin.branch}`"""
             pushb.add(tagref)
         }
 
+        def pushCall = {
+            pushb.call()
+        }
         def push
         try {
-            push = pushb.call()
+            if(plugin.commonConfig.isSharedCheckout()){
+                synchronized (plugin.GLOBAL_GIT_LOCK){
+                    push = pushCall()
+                }
+            }else{
+                push = pushCall()
+            }
         } catch (Exception e) {
             plugin.logger.debug("Failed push to remote: ${e.message}", e)
             throw new ScmPluginException("Failed push to remote: ${e.message}", e)
