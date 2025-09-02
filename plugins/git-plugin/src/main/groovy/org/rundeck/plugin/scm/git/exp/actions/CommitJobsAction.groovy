@@ -167,6 +167,24 @@ class CommitJobsAction extends BaseAction implements GitExportAction {
         result.commit=new GitScmCommit(GitUtil.metaForCommit(commit))
         plugin.cleanJobStatusCache(jobs)
 
+        // When using shared checkout, an export commit should immediately reflect as up-to-date for import side.
+        // Update in-memory import metadata commitId to the new HEAD to avoid a spurious IMPORT_NEEDED with empty diff.
+        if(plugin.commonConfig.isSharedCheckout() && commit){
+            jobs?.each{ j ->
+                if(j instanceof JobScmReference){
+                    try{
+                        def meta = ((JobScmReference)j).scmImportMetadata
+                        if(meta){
+                            meta.commitId = commit.name
+                            meta.url = plugin.commonConfig?.url ?: meta.url
+                        }
+                    }catch(Throwable ignored){
+                        // best-effort; ignore if structure differs
+                    }
+                }
+            }
+        }
+
         if (result.success && input[TagAction.P_TAG_NAME]) {
             def tagResult = plugin.export(context, GitExportPlugin.PROJECT_TAG_ACTION_ID, jobs, pathsToDelete, input)
             if (!tagResult.success) {

@@ -493,7 +493,17 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
                     }
                 }
             }
-            //different commit was imported previously, or job has been modified
+            //different commit was imported previously, or job has been modified.
+            // For shared checkout, allow fast-path: if working tree content matches serialized job, treat as CLEAN.
+            if(commonConfig?.isSharedCheckout()){
+                try{
+                    if(!contentDiffers(job, commit, path)){
+                        return ImportSynchState.CLEAN
+                    }
+                }catch(Throwable ignored){
+                    // fall through
+                }
+            }
             return ImportSynchState.IMPORT_NEEDED
         }
     }
