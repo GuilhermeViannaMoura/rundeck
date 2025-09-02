@@ -559,22 +559,35 @@ class BaseGitPlugin {
             //test url matches origin
             def config = agit.getRepository().getConfig()
             def found = config.getString("remote", REMOTE_NAME, "url")
-            def projectName = config.getString("rundeck", "scm-plugin", "project-name")
+            def projectNameRaw = config.getString("rundeck", "scm-plugin", "project-name")
             def gitIntegration = config.getString("rundeck", "scm-plugin", "integration")
             boolean shared = commonConfig?.isSharedCheckout()
-            boolean projectMismatch = projectName && !projectName.equals(context.frameworkProject)
+            // support comma-separated list of project names when shared checkout is enabled
+            Set<String> projectNames = [] as Set
+            if(projectNameRaw){
+                projectNames.addAll(projectNameRaw.split(',').collect{ it.trim() }.findAll{ it })
+            }
+            boolean projectMismatch = projectNames && !projectNames.contains(context.frameworkProject)
             boolean integrationMismatch = gitIntegration && !gitIntegration.split(',').contains(integration)
+
+            if(projectMismatch && shared){
+                // allow adding this project to the list when shared checkout is enabled
+                projectNames << context.frameworkProject
+                config.setString("rundeck", "scm-plugin", "project-name", projectNames.join(','))
+                config.save()
+                projectMismatch = false
+            }
             if (projectMismatch || (integrationMismatch && !shared)) {
                 throw new ScmPluginInvalidInput(
-                        "The base directory is already in use by another project: ${projectName} with integration : ${gitIntegration}",
+                        "The base directory is already in use by another project: ${projectNameRaw} with integration : ${gitIntegration}",
                         Validator.errorReport(
                                 'dir',
-                                "The base directory is already in use by another project: ${projectName} with integration : ${gitIntegration}"
+                                "The base directory is already in use by another project: ${projectNameRaw} with integration : ${gitIntegration}"
                         )
                 )
             }
             // initialize or update metadata
-            if (!projectName) {
+            if (!projectNameRaw) {
                 config.setString("rundeck", "scm-plugin", "project-name", context.frameworkProject)
             }
             if (!gitIntegration) {
@@ -624,12 +637,10 @@ class BaseGitPlugin {
      */
     protected File resolveWorkingDir(File projectBaseDir){
         if(commonConfig?.isSharedCheckout()){
-            //If path is absolute, use directly, else relative to project base dir parent.
+            //If path is absolute, use directly, else relative to project base dir.
             File shared = new File(commonConfig.sharedCheckoutPath)
             if(!shared.isAbsolute()){
-                // place under original dir's parent to keep location predictable
-                File parent = projectBaseDir?.parentFile ?: projectBaseDir
-                shared = new File(parent, commonConfig.sharedCheckoutPath)
+                shared = new File(projectBaseDir, commonConfig.sharedCheckoutPath)
             }
             return shared
         }
